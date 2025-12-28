@@ -1,5 +1,4 @@
 const zlox = @import("zlox");
-
 const lex = @import("lex.zig");
 
 const std = @import("std");
@@ -25,19 +24,29 @@ pub fn greetUser() !void {
     try writer.interface.print("{s}", .{greetUserMsg});
 }
 
-pub fn repl() !void {
+pub fn repl(alloc: std.mem.Allocator) !void {
     try greetUser();
     while (true) {
         try prompt();
         const src = try read_input();
-        try writer.interface.print("Source = {s}\n", .{src});
-        const ll = lex.Lexer{ .src = src };
+
+        if (src.len == 0) {
+            continue;
+        }
+
+        try writer.interface.print("Source: {s}\n", .{src});
+        var ll = try lex.Lexer.init(alloc, src);
         try ll.lex();
     }
 }
 
 pub fn main() !void {
-    try repl();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const allocator = arena.allocator();
+
+    try repl(allocator);
 }
 
 test "simple test" {

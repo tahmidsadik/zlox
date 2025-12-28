@@ -1,10 +1,9 @@
 const std = @import("std");
+var gpa: std.mem.Allocator = undefined;
 
 const buf: []u8 = undefined;
 var writer = std.fs.File.stdout().writer(buf);
-
 const oneOrTwoCharacter = enum {};
-
 pub const MyType = enum { Okay, NotOkay };
 
 const TokenType = enum(u8) {
@@ -115,6 +114,37 @@ const TokenType = enum(u8) {
             return TokenType.none;
         }
     }
+
+    fn try_parse_with_single_char(char: u8) TokenType {
+        if (char == '{') {
+            return TokenType.left_brace;
+        } else if (char == '}') {
+            return TokenType.right_brace;
+        } else if (char == '(') {
+            return TokenType.left_paren;
+        } else if (char == ')') {
+            return TokenType.right_paren;
+        }
+
+        // Special characters
+        else if (char == ',') {
+            return TokenType.comma;
+        } else if (char == '.') {
+            return TokenType.dot;
+        } else if (char == '-') {
+            return TokenType.minus;
+        } else if (char == '+') {
+            return TokenType.plus;
+        } else if (char == ';') {
+            return TokenType.semicolon;
+        } else if (char == '/') {
+            return TokenType.slash;
+        } else if (char == '*') {
+            return TokenType.star;
+        }
+
+        return TokenType.none;
+    }
 };
 
 const Token = struct { line: u32, lexeme: []const u8, tokenType: TokenType };
@@ -128,13 +158,112 @@ pub fn getToken() Token {
 
 // write a function that takes a string and process characters one by one
 pub const Lexer = struct {
+    // allocator: std.mem.
     src: []const u8,
+    current_char: u8,
+    current_idx: u32 = 0,
+    parsed_tokens: std.ArrayList(TokenType),
+    src_len: usize,
+    eof_reached: bool = false,
 
-    pub fn lex(self: *const Lexer) !void {
-        for (self.src) |c| {
-            // try writer.interface.print("char = {c}\n", .{c});
-            const tt = TokenType.fromString(&[_]u8{c});
-            std.debug.print("{s}\n", .{@tagName(tt)});
+    pub fn init(alloc: std.mem.Allocator, src: []const u8) !Lexer {
+        // initialize global allocator
+
+        gpa = alloc;
+
+        const tokens = try std.ArrayList(TokenType).initCapacity(alloc, 16);
+        const new_lexer = Lexer{ .src = src, .parsed_tokens = tokens, .current_char = src[0], .current_idx = 0, .src_len = src.len };
+
+        return new_lexer;
+    }
+
+    pub fn print_state(self: *const Lexer) void {
+        std.debug.print("current_char = {c}, current_idx = {d} \n", .{ self.current_char, self.current_idx });
+    }
+
+    pub fn advance(self: *Lexer) void {
+        if (self.current_idx + 1 >= self.src_len) {
+            self.eof_reached = true;
+            return;
         }
+
+        self.current_idx = self.current_idx + 1;
+        self.current_char = self.src[self.current_idx];
+    }
+
+    fn advance_if_matched(self: *Lexer, char_to_match: u8) bool {
+        if (self.current_idx + 1 >= self.src_len) {
+            return false;
+        }
+
+        // std.debug.print("(idx+1): {c}, char_to_match: {c}\n", .{ self.src[self.current_idx + 1], char_to_match });
+
+        if (self.current_idx + 1 < self.src_len and self.src[self.current_idx + 1] == char_to_match) {
+            self.current_idx = self.current_idx + 1;
+            return true;
+        }
+
+        return false;
+    }
+
+    fn try_parse_one_or_two_char(self: *Lexer, char: u8) TokenType {
+        if (char == '!') {
+            if (self.advance_if_matched('=')) {
+                return TokenType.bang_equal;
+            }
+            return TokenType.bang;
+        } else if (char == '=') {
+            std.debug.print("current_char: {c}, current_idx: {d}\n", .{ self.current_char, self.current_idx });
+
+            if (self.advance_if_matched('=')) {
+                return TokenType.equal_equal;
+            }
+            return TokenType.equal;
+        } else if (char == '<') {
+            if (self.advance_if_matched('=')) {
+                return TokenType.less_equal;
+            }
+            return TokenType.less;
+        } else if (char == '>') {
+            if (self.advance_if_matched('=')) {
+                return TokenType.greater_equal;
+            }
+            return TokenType.greater;
+        }
+
+        return TokenType.none;
+    }
+
+    fn print_tokens(self: *const Lexer) void {
+        for (self.parsed_tokens.items) |tok| {
+            std.debug.print("Token = {s}\n", .{@tagName(tok)});
+        }
+    }
+
+    fn add_token(self: *Lexer, token: TokenType) !void {
+        const err = try self.parsed_tokens.append(gpa, token);
+        _ = err;
+    }
+
+    fn lex_single_token(self: *Lexer) TokenType {
+        var token = TokenType.try_parse_with_single_char(self.current_char);
+
+        if (token == TokenType.none) {
+            token = self.try_parse_one_or_two_char(self.current_char);
+        }
+
+        return token;
+    }
+
+    pub fn lex(self: *Lexer) !void {
+        while (!self.eof_reached) {
+            const token = self.lex_single_token();
+            try self.add_token(token);
+
+            self.advance();
+        }
+
+        std.debug.print("EOF Reached\n", .{});
+        self.print_tokens();
     }
 };
