@@ -34,7 +34,7 @@ const TokenType = enum(u8) {
     dot,
     minus,
     plus,
-    semiColon,
+    semicolon,
     slash,
     star,
     // one or multi characters
@@ -46,57 +46,73 @@ const TokenType = enum(u8) {
     greater_equal,
     less,
     less_equal,
-    none = 100000,
+    none,
 
-    pub fn fromString(char: []u8) TokenType {
+    pub fn fromString(char: []const u8) TokenType {
         // Keywords
         if (std.mem.eql(u8, char, "and")) {
-            TokenType.And;
+            return TokenType.bool_and;
         } else if (std.mem.eql(u8, char, "or")) {
-            TokenType.Or;
+            return TokenType.bool_or;
         } else if (std.mem.eql(u8, char, "not")) {
-            TokenType.Not;
+            return TokenType.bool_not;
         } else if (std.mem.eql(u8, char, "if")) {
-            TokenType.If;
+            return TokenType.bool_if;
         } else if (std.mem.eql(u8, char, "true")) {
-            TokenType.True;
+            return TokenType.true;
         } else if (std.mem.eql(u8, char, "false")) {
-            TokenType.False;
+            return TokenType.false;
         }
 
         // Braces and parens
 
         else if (std.mem.eql(u8, char, "{")) {
-            TokenType.LeftBrace;
+            return TokenType.left_brace;
         } else if (std.mem.eql(u8, char, "}")) {
-            TokenType.RightBrace;
+            return TokenType.right_brace;
         } else if (std.mem.eql(u8, char, "(")) {
-            TokenType.LeftParen;
+            return TokenType.left_paren;
         } else if (std.mem.eql(u8, char, ")")) {
-            TokenType.RightParen;
+            return TokenType.right_paren;
         }
 
         // Special characters
         else if (std.mem.eql(u8, char, ",")) {
-            TokenType.Comma;
+            return TokenType.comma;
         } else if (std.mem.eql(u8, char, ".")) {
-            TokenType.Dot;
+            return TokenType.dot;
         } else if (std.mem.eql(u8, char, "-")) {
-            TokenType.Minus;
+            return TokenType.minus;
         } else if (std.mem.eql(u8, char, "+")) {
-            TokenType.Plus;
+            return TokenType.plus;
         } else if (std.mem.eql(u8, char, ";")) {
-            TokenType.SemiColon;
+            return TokenType.semicolon;
         } else if (std.mem.eql(u8, char, "/")) {
-            TokenType.Slash;
+            return TokenType.slash;
         } else if (std.mem.eql(u8, char, "*")) {
-            TokenType.Star;
+            return TokenType.star;
         } else if (std.mem.eql(u8, char, ".")) {
-            TokenType.Dot;
+            return TokenType.dot;
         } else if (std.mem.eql(u8, char, "EOF")) {
-            TokenType.EOF;
+            return TokenType.EOF;
+        } else if (std.mem.eql(u8, char, "!")) {
+            return TokenType.bang;
+        } else if (std.mem.eql(u8, char, "!=")) {
+            return TokenType.bang_equal;
+        } else if (std.mem.eql(u8, char, "=")) {
+            return TokenType.equal;
+        } else if (std.mem.eql(u8, char, "==")) {
+            return TokenType.equal_equal;
+        } else if (std.mem.eql(u8, char, ">")) {
+            return TokenType.greater;
+        } else if (std.mem.eql(u8, char, ">=")) {
+            return TokenType.greater_equal;
+        } else if (std.mem.eql(u8, char, "<")) {
+            return TokenType.less;
+        } else if (std.mem.eql(u8, char, "<=")) {
+            return TokenType.less_equal;
         } else {
-            TokenType.None;
+            return TokenType.none;
         }
     }
 };
@@ -116,7 +132,9 @@ pub const Lexer = struct {
 
     pub fn lex(self: *const Lexer) !void {
         for (self.src) |c| {
-            try writer.interface.print("char = {c}\n", .{c});
+            // try writer.interface.print("char = {c}\n", .{c});
+            const tt = TokenType.fromString(&[_]u8{c});
+            std.debug.print("{s}\n", .{@tagName(tt)});
         }
     }
 };

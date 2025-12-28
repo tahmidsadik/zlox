@@ -30,23 +30,14 @@ pub fn repl() !void {
     while (true) {
         try prompt();
         const src = try read_input();
-
         try writer.interface.print("Source = {s}\n", .{src});
-
         const ll = lex.Lexer{ .src = src };
-
         try ll.lex();
     }
 }
 
 pub fn main() !void {
-    // try repl();
-
-    const ff = lex.MyType.Okay;
-
-    const nameOfEnum = @tagName(ff);
-
-    std.debug.print("ff = {s} \n", .{nameOfEnum});
+    try repl();
 }
 
 test "simple test" {
