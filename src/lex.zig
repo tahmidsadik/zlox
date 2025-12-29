@@ -3,10 +3,8 @@ var gpa: std.mem.Allocator = undefined;
 
 const buf: []u8 = undefined;
 var writer = std.fs.File.stdout().writer(buf);
-const oneOrTwoCharacter = enum {};
-pub const MyType = enum { Okay, NotOkay };
 
-const TokenType = enum(u8) {
+const TokenType = union(enum) {
     // keywords
     bool_and,
     bool_or,
@@ -21,7 +19,7 @@ const TokenType = enum(u8) {
     identifier,
     string,
     number,
-    literal_string,
+    literal_string: []const u8,
     literal_number,
 
     // Braces and parens
@@ -48,74 +46,6 @@ const TokenType = enum(u8) {
     less,
     less_equal,
     none,
-
-    pub fn fromString(char: []const u8) TokenType {
-        // Keywords
-        if (std.mem.eql(u8, char, "and")) {
-            return TokenType.bool_and;
-        } else if (std.mem.eql(u8, char, "or")) {
-            return TokenType.bool_or;
-        } else if (std.mem.eql(u8, char, "not")) {
-            return TokenType.bool_not;
-        } else if (std.mem.eql(u8, char, "if")) {
-            return TokenType.bool_if;
-        } else if (std.mem.eql(u8, char, "true")) {
-            return TokenType.true;
-        } else if (std.mem.eql(u8, char, "false")) {
-            return TokenType.false;
-        }
-
-        // Braces and parens
-
-        else if (std.mem.eql(u8, char, "{")) {
-            return TokenType.left_brace;
-        } else if (std.mem.eql(u8, char, "}")) {
-            return TokenType.right_brace;
-        } else if (std.mem.eql(u8, char, "(")) {
-            return TokenType.left_paren;
-        } else if (std.mem.eql(u8, char, ")")) {
-            return TokenType.right_paren;
-        }
-
-        // Special characters
-        else if (std.mem.eql(u8, char, ",")) {
-            return TokenType.comma;
-        } else if (std.mem.eql(u8, char, ".")) {
-            return TokenType.dot;
-        } else if (std.mem.eql(u8, char, "-")) {
-            return TokenType.minus;
-        } else if (std.mem.eql(u8, char, "+")) {
-            return TokenType.plus;
-        } else if (std.mem.eql(u8, char, ";")) {
-            return TokenType.semicolon;
-        } else if (std.mem.eql(u8, char, "/")) {
-            return TokenType.slash;
-        } else if (std.mem.eql(u8, char, "*")) {
-            return TokenType.star;
-        } else if (std.mem.eql(u8, char, ".")) {
-            return TokenType.dot;
-        } else if (std.mem.eql(u8, char, "EOF")) {
-            return TokenType.EOF;
-        } else if (std.mem.eql(u8, char, "!")) {
-            return TokenType.bang;
-        } else if (std.mem.eql(u8, char, "!=")) {
-            return TokenType.bang_equal;
-        } else if (std.mem.eql(u8, char, "=")) {
-            return TokenType.equal;
-        } else if (std.mem.eql(u8, char, "==")) {
-            return TokenType.equal_equal;
-        } else if (std.mem.eql(u8, char, ">")) {
-            return TokenType.greater;
-        } else if (std.mem.eql(u8, char, ">=")) {
-            return TokenType.greater_equal;
-        } else if (std.mem.eql(u8, char, "<")) {
-            return TokenType.less;
-        } else if (std.mem.eql(u8, char, "<=")) {
-            return TokenType.less_equal;
-        } else {
-            return TokenType.none;
-        }
-    }
 
     fn try_parse_with_single_char(char: u8) TokenType {
         if (char == '{') {
@@ -255,8 +185,7 @@ pub const Lexer = struct {
 
     fn lex_string(self: *Lexer) !TokenType {
         const xx = try self.peek_until_match('"');
-        _ = xx;
-        return TokenType.literal_string;
+        return .{ .literal_string = xx };
     }
 
     fn try_parse_one_or_two_char(self: *Lexer, char: u8) TokenType {
@@ -306,8 +235,14 @@ pub const Lexer = struct {
 
     fn print_tokens(self: *const Lexer) void {
         for (self.parsed_tokens.items) |tok| {
-            if (tok != TokenType.none) {
-                std.debug.print("Token = {s}\n", .{@tagName(tok)});
+            switch (tok) {
+                .literal_string => |value| {
+                    std.debug.print("String({s})\n", .{value});
+                },
+                TokenType.none => {},
+                else => {
+                    std.debug.print("Token = {s}\n", .{@tagName(tok)});
+                },
             }
         }
     }
