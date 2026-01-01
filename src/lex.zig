@@ -20,7 +20,7 @@ const TokenType = union(enum) {
     string,
     number,
     literal_string: []const u8,
-    literal_number,
+    literal_number: []const u8,
 
     // Braces and parens
     left_brace,
@@ -188,6 +188,56 @@ pub const Lexer = struct {
         return .{ .literal_string = xx };
     }
 
+    fn is_number(c: u8) bool {
+        return (c >= '0') and (c <= '9');
+    }
+
+    fn is_dot(c: u8) bool {
+        return c == '.';
+    }
+
+    fn is_number_or_dot(c: u8) bool {
+        return (is_number(c)) or (is_dot(c));
+    }
+
+    // scan literal numbers
+    // Numbers can be like
+    // 11, 11.232 0.51
+    // The rules is is number || is dot and then is number only
+    fn lex_number(self: *Lexer) TokenType {
+        if (!self.safe_to_peek(self.current_idx)) {
+            return .{ .literal_number = self.src[self.current_idx..] };
+        }
+
+        const start = self.current_idx;
+        var i = start;
+        var allow_dot = true;
+        var cchar = self.peek(i) catch unreachable;
+
+        while (true) {
+            if (is_dot(cchar)) {
+                if (allow_dot == true) {
+                    allow_dot = false;
+                } else {
+                    break;
+                }
+            } else if (!is_number(cchar)) {
+                break;
+            }
+
+            i = i + 1;
+
+            if (!self.safe_to_peek(i)) {
+                break;
+            }
+
+            cchar = self.peek(i) catch unreachable;
+        }
+
+        self.current_idx = i;
+        return .{ .literal_number = self.src[start .. i + 1] };
+    }
+
     fn try_parse_one_or_two_char(self: *Lexer, char: u8) TokenType {
         if (char == '!') {
             if (self.advance_if_matched('=')) {
@@ -228,6 +278,8 @@ pub const Lexer = struct {
                 }
                 return TokenType.none;
             }
+        } else if (is_number(char)) {
+            return self.lex_number();
         }
 
         return TokenType.none;
@@ -238,6 +290,9 @@ pub const Lexer = struct {
             switch (tok) {
                 .literal_string => |value| {
                     std.debug.print("String({s})\n", .{value});
+                },
+                .literal_number => |value| {
+                    std.debug.print("Number({s})\n", .{value});
                 },
                 TokenType.none => {},
                 else => {
