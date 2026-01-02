@@ -1,5 +1,6 @@
 const std = @import("std");
-var gpa: std.mem.Allocator = undefined;
+
+pub var gpa: std.mem.Allocator = undefined;
 
 const buf: []u8 = undefined;
 var writer = std.fs.File.stdout().writer(buf);
@@ -14,11 +15,22 @@ const TokenType = union(enum) {
     true,
     false,
 
+    fun,
+    class,
+    super,
+    this,
+
+    loop_while,
+    loop_for,
+
+    nil,
+    print_stmt,
+    return_stmt,
+    var_stmt,
+
     EOF,
     // identifiers
-    identifier,
-    string,
-    number,
+    identifier: []const u8,
     literal_string: []const u8,
     literal_number: []const u8,
 
@@ -79,6 +91,48 @@ const TokenType = union(enum) {
     }
 };
 
+var map_kw: std.StringHashMap(TokenType) = undefined;
+
+pub fn init_kw() void {
+    map_kw = std.StringHashMap(TokenType).init(gpa);
+    try map_kw.put("and", .{.bool_and});
+    try map_kw.put("or", .{.bool_or});
+    try map_kw.put("not", .{.bool_not});
+
+    try map_kw.put("if", .{.bool_if});
+    try map_kw.put("else", .{.bool_else});
+
+    try map_kw.put("true", .{.bool_if});
+    try map_kw.put("false", .{.bool_else});
+
+    try map_kw.put("class", .{.class});
+    try map_kw.put("for", .{.loop_for});
+    try map_kw.put("fun", .{.fun});
+
+    try map_kw.put("nil", .{.nil});
+
+    try map_kw.put("print", .{.print});
+    try map_kw.put("return", .{.return_stmt});
+    try map_kw.put("super", .{.super});
+
+    try map_kw.put("this", .{.this});
+    try map_kw.put("var", .{.var_stmt});
+    try map_kw.put("while", .{.loop_while});
+}
+
+// checks whether the given string is a keyword
+pub fn is_keyword(key: []const u8) bool {
+    return map_kw.contains(key);
+}
+
+pub fn try_parse_into_keyword(key: []const u8) ?TokenType {
+    if (is_keyword(key)) {
+        return map_kw.get(key).?;
+    }
+
+    return null;
+}
+
 const Token = struct { line: u32, lexeme: []const u8, tokenType: TokenType };
 
 pub fn getToken() Token {
@@ -111,7 +165,7 @@ pub const Lexer = struct {
         return new_lexer;
     }
 
-    pub fn print_state(self: *const Lexer) void {
+    pub fn pgint_state(self: *const Lexer) void {
         std.debug.print("current_char = {c}, current_idx = {d} \n", .{ self.current_char, self.current_idx });
     }
 
@@ -183,6 +237,25 @@ pub const Lexer = struct {
         return string_val;
     }
 
+    // takes a function and keeps taking chracters as long as the function returns true
+    fn peek_while(self: *Lexer, predicate_fn: fn (u8) bool) ![]const u8 {
+        if (!self.safe_to_peek(self.current_idx)) {
+            return self.src[self.current_idx..];
+        }
+
+        const start_idx = self.current_idx;
+        var idx = start_idx;
+        var c = try self.peek(self.current_idx);
+
+        while (predicate_fn(c)) {
+            idx = idx + 1;
+            c = try self.peek(idx);
+        }
+
+        self.current_idx = idx;
+        return self.src[start_idx .. idx + 1];
+    }
+
     fn lex_string(self: *Lexer) !TokenType {
         const xx = try self.peek_until_match('"');
         return .{ .literal_string = xx };
@@ -198,6 +271,10 @@ pub const Lexer = struct {
 
     fn is_number_or_dot(c: u8) bool {
         return (is_number(c)) or (is_dot(c));
+    }
+
+    fn is_alpha(c: u8) bool {
+        return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_';
     }
 
     // scan literal numbers
@@ -245,8 +322,6 @@ pub const Lexer = struct {
             }
             return TokenType.bang;
         } else if (char == '=') {
-            std.debug.print("current_char: {c}, current_idx: {d}\n", .{ self.current_char, self.current_idx });
-
             if (self.advance_if_matched('=')) {
                 return TokenType.equal_equal;
             }
@@ -261,25 +336,6 @@ pub const Lexer = struct {
                 return TokenType.greater_equal;
             }
             return TokenType.greater;
-        } else if (char == '"') {
-            const response = self.lex_string();
-            if (response) |tt| {
-                return tt;
-            } else |err| {
-                switch (err) {
-                    LexError.UnterminatedStringLiteral => {
-                        const err_msg = "Unterminated String Literal Detected - couldn't find closing \" starting from idx {d}\n";
-                        std.debug.print(err_msg, .{self.current_idx});
-                    },
-                    LexError.EOFReached => {
-                        const err_msg = "Unexpectedly reached EOF\n";
-                        std.debug.print(err_msg, .{});
-                    },
-                }
-                return TokenType.none;
-            }
-        } else if (is_number(char)) {
-            return self.lex_number();
         }
 
         return TokenType.none;
@@ -294,9 +350,12 @@ pub const Lexer = struct {
                 .literal_number => |value| {
                     std.debug.print("Number({s})\n", .{value});
                 },
+                .identifier => |value| {
+                    std.debug.print("Identifier({s})\n", .{value});
+                },
                 TokenType.none => {},
                 else => {
-                    std.debug.print("Token = {s}\n", .{@tagName(tok)});
+                    std.debug.print("Token({s})\n", .{@tagName(tok)});
                 },
             }
         }
@@ -308,10 +367,60 @@ pub const Lexer = struct {
     }
 
     fn lex_single_token(self: *Lexer) TokenType {
+        if (self.current_char == ' ') {
+            return TokenType.none;
+        }
+
         var token = TokenType.try_parse_with_single_char(self.current_char);
 
         if (token == TokenType.none) {
             token = self.try_parse_one_or_two_char(self.current_char);
+        }
+
+        if (token == TokenType.none) {
+            if (is_number(self.current_char)) {
+                token = self.lex_number();
+            } else if (self.current_char == '"') {
+                const response = self.lex_string();
+                if (response) |tt| {
+                    token = tt;
+                } else |err| {
+                    switch (err) {
+                        LexError.UnterminatedStringLiteral => {
+                            const err_msg = "Unterminated String Literal Detected - couldn't find closing \" starting from idx {d}\n";
+                            std.debug.print(err_msg, .{self.current_idx});
+                        },
+                        LexError.EOFReached => {
+                            const err_msg = "Unexpectedly reached EOF\n";
+                            std.debug.print(err_msg, .{});
+                        },
+                    }
+                    return TokenType.none;
+                }
+            } else if (is_alpha(self.current_char)) {
+                const response = self.peek_while(is_alpha);
+                if (response) |val| {
+                    const kw = try_parse_into_keyword(val);
+
+                    if (kw) |keyword| {
+                        return keyword;
+                    }
+
+                    return .{ .identifier = val };
+                } else |err| {
+                    switch (err) {
+                        LexError.UnterminatedStringLiteral => {
+                            const err_msg = "Unterminated String Literal Detected - couldn't find closing \" starting from idx {d}\n";
+                            std.debug.print(err_msg, .{self.current_idx});
+                        },
+                        LexError.EOFReached => {
+                            const err_msg = "Unexpectedly reached EOF\n";
+                            std.debug.print(err_msg, .{});
+                        },
+                    }
+                    return TokenType.none;
+                }
+            }
         }
 
         return token;
@@ -320,12 +429,13 @@ pub const Lexer = struct {
     pub fn lex(self: *Lexer) !void {
         while (!self.eof_reached) {
             const token = self.lex_single_token();
-            try self.add_token(token);
+            if (token != TokenType.none) {
+                try self.add_token(token);
+            }
 
             self.advance();
         }
 
-        std.debug.print("EOF Reached\n", .{});
         self.print_tokens();
     }
 };

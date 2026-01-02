@@ -1,7 +1,11 @@
 const zlox = @import("zlox");
+const std = @import("std");
+
+var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+const allocator = arena.allocator();
+
 const lex = @import("lex.zig");
 
-const std = @import("std");
 const stdout_buf: []u8 = undefined;
 var writer = std.fs.File.stdout().writer(stdout_buf);
 
@@ -41,10 +45,8 @@ pub fn repl(alloc: std.mem.Allocator) !void {
 }
 
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
-
-    const allocator = arena.allocator();
+    lex.gpa = allocator;
 
     try repl(allocator);
 }
