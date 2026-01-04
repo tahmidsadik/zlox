@@ -5,6 +5,7 @@ var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 const allocator = arena.allocator();
 
 const lex = @import("lex.zig");
+const parser = @import("parser.zig");
 
 const stdout_buf: []u8 = undefined;
 var writer = std.fs.File.stdout().writer(stdout_buf);

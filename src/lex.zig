@@ -5,7 +5,7 @@ pub var gpa: std.mem.Allocator = undefined;
 const buf: []u8 = undefined;
 var writer = std.fs.File.stdout().writer(buf);
 
-const TokenType = union(enum) {
+pub const TokenType = union(enum) {
     // keywords
     bool_and,
     bool_or,
