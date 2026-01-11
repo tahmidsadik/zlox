@@ -93,31 +93,31 @@ pub const TokenType = union(enum) {
 
 var map_kw: std.StringHashMap(TokenType) = undefined;
 
-pub fn init_kw() void {
+pub fn init_kw() !void {
     map_kw = std.StringHashMap(TokenType).init(gpa);
-    try map_kw.put("and", .{.bool_and});
-    try map_kw.put("or", .{.bool_or});
-    try map_kw.put("not", .{.bool_not});
+    try map_kw.put("and", TokenType.bool_and);
+    try map_kw.put("or", TokenType.bool_or);
+    try map_kw.put("not", TokenType.bool_not);
 
-    try map_kw.put("if", .{.bool_if});
-    try map_kw.put("else", .{.bool_else});
+    try map_kw.put("if", TokenType.bool_if);
+    try map_kw.put("else", TokenType.bool_else);
 
-    try map_kw.put("true", .{.bool_if});
-    try map_kw.put("false", .{.bool_else});
+    try map_kw.put("true", TokenType.true);
+    try map_kw.put("false", TokenType.false);
 
-    try map_kw.put("class", .{.class});
-    try map_kw.put("for", .{.loop_for});
-    try map_kw.put("fun", .{.fun});
+    try map_kw.put("class", TokenType.class);
+    try map_kw.put("for", TokenType.loop_for);
+    try map_kw.put("fun", TokenType.fun);
 
-    try map_kw.put("nil", .{.nil});
+    try map_kw.put("nil", TokenType.nil);
 
-    try map_kw.put("print", .{.print});
-    try map_kw.put("return", .{.return_stmt});
-    try map_kw.put("super", .{.super});
+    try map_kw.put("print", TokenType.print_stmt);
+    try map_kw.put("return", TokenType.return_stmt);
+    try map_kw.put("super", TokenType.super);
 
-    try map_kw.put("this", .{.this});
-    try map_kw.put("var", .{.var_stmt});
-    try map_kw.put("while", .{.loop_while});
+    try map_kw.put("this", TokenType.this);
+    try map_kw.put("var", TokenType.var_stmt);
+    try map_kw.put("while", TokenType.loop_while);
 }
 
 // checks whether the given string is a keyword
@@ -249,10 +249,13 @@ pub const Lexer = struct {
 
         while (predicate_fn(c)) {
             idx = idx + 1;
-            c = try self.peek(idx);
+            c = self.peek(idx) catch {
+                break;
+            };
         }
 
         self.current_idx = idx;
+        // std.debug.print("peeking while - returning value = {s}\n", .{self.src[start_idx .. idx + 1]});
         return self.src[start_idx .. idx + 1];
     }
 
@@ -436,6 +439,6 @@ pub const Lexer = struct {
             self.advance();
         }
 
-        self.print_tokens();
+        // self.print_tokens();
     }
 };

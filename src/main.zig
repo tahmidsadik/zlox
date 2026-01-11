@@ -42,12 +42,19 @@ pub fn repl(alloc: std.mem.Allocator) !void {
         try writer.interface.print("Source: {s}\n", .{src});
         var ll = try lex.Lexer.init(alloc, src);
         try ll.lex();
+
+        var pp = parser.Parser.init(ll.parsed_tokens);
+
+        try pp.parse();
     }
 }
 
 pub fn main() !void {
     defer arena.deinit();
     lex.gpa = allocator;
+    parser.gpa = allocator;
+
+    try lex.init_kw();
 
     try repl(allocator);
 }
